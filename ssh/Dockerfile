@@ -1,6 +1,18 @@
 # SSH variant: the same toolbox (claude, grok, cline, gh, tmux) reachable over
 # plain OpenSSH instead of a web terminal. No ttyd in this image on purpose —
 # key-only sshd is the sole way in.
+
+# tmux 3.7b from source (bookworm ships 3.3a, which mishandles wide/unicode
+# chars in TUIs). utf8proc gives it correct character-width tables.
+FROM node:22-bookworm-slim AS tmux-build
+ARG TMUX_VERSION=3.7b
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      gcc make bison pkg-config ca-certificates curl \
+      libevent-dev libncurses-dev libutf8proc-dev \
+    && curl -fsSL "https://github.com/tmux/tmux/releases/download/${TMUX_VERSION}/tmux-${TMUX_VERSION}.tar.gz" | tar xz -C /tmp \
+    && cd "/tmp/tmux-${TMUX_VERSION}" \
+    && ./configure --enable-utf8proc && make -j"$(nproc)" && make install
+
 FROM node:22-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -9,10 +21,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ripgrep \
       curl \
       bash \
-      tmux \
+      libevent-core-2.1-7 \
+      libutf8proc2 \
       openssh-server \
       libnss-wrapper \
     && rm -rf /var/lib/apt/lists/*
+
+COPY --from=tmux-build /usr/local/bin/tmux /usr/local/bin/tmux
 
 # GitHub CLI (gh) — not in Debian bookworm repos, use GitHub's official apt repo.
 RUN set -eux; \
