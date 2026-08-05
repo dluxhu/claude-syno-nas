@@ -8,6 +8,9 @@ name: claude-nas-ssh
 
 services:
   ssh:
+    # Prebuilt image by default; `docker compose -f docker-compose.ssh.yml up -d --build`
+    # rebuilds from ./ssh.
+    image: ghcr.io/dluxhu/claude-nas-ssh:latest
     build: ./ssh
     container_name: claude-ssh
     restart: unless-stopped

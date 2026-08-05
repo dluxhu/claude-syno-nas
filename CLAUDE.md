@@ -31,7 +31,8 @@ portainer/  chat-stack.yml terminal-stack.yml   # image-based composes for Porta
 - `.github/workflows/build.yml` builds `claude-nas-bridge` + `claude-nas-terminal` for amd64+arm64 and pushes to
   `ghcr.io/dluxhu/*` on every push to main (+ `v*` tags). Uses GITHUB_TOKEN, `packages: write`.
 - Make the GHCR packages **public** after first build, or add ghcr creds in Portainer.
-- Local dev still uses the `build:` composes; Portainer/prod uses the image-based `portainer/` composes.
+- Root composes declare both `image:` (GHCR, default — plain `up -d` pulls) and `build:`
+  (`up -d --build` builds locally). Portainer uses the image-only `portainer/` composes.
 
 ## Key facts
 
@@ -47,8 +48,9 @@ portainer/  chat-stack.yml terminal-stack.yml   # image-based composes for Porta
 ## Common commands
 
 ```bash
-sudo docker compose up -d --build                              # chat
-sudo docker compose -f docker-compose.terminal.yml up -d --build   # terminal
+sudo docker compose up -d                                      # chat (pulls GHCR; --build to build)
+sudo docker compose -f docker-compose.terminal.yml up -d       # terminal
+sudo docker compose -f docker-compose.ssh.yml up -d            # ssh
 node --check bridge/server.js                                  # local sanity
 docker compose config                                          # validate compose
 ```

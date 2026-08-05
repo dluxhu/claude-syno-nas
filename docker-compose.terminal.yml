@@ -5,6 +5,9 @@ name: claude-nas-terminal
 
 services:
   terminal:
+    # Prebuilt image by default; `docker compose -f docker-compose.terminal.yml up -d --build`
+    # rebuilds from ./ttyd.
+    image: ghcr.io/dluxhu/claude-nas-terminal:latest
     build: ./ttyd
     container_name: claude-terminal
     restart: unless-stopped

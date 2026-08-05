@@ -4,6 +4,8 @@ services:
   # ── The agent: Claude Code wrapped behind an OpenAI-compatible API ──────────
   # Not published to the LAN. Reachable only by open-webui on the internal network.
   bridge:
+    # Prebuilt image by default; `docker compose up -d --build` rebuilds from ./bridge.
+    image: ghcr.io/dluxhu/claude-nas-bridge:latest
     build: ./bridge
     container_name: claude-bridge
     restart: unless-stopped

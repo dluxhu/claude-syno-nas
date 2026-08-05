@@ -64,8 +64,10 @@ Set `BRIDGE_API_KEY` in `.env` to any long random string (`openssl rand -hex 32`
 Start it from Container Manager (Project → Create → point it at this folder → Run), or over SSH:
 
 ```
-sudo docker compose up -d --build
+sudo docker compose up -d
 ```
+
+This pulls the prebuilt image from GHCR. To build it yourself instead, add `--build`.
 
 Open `http://your-nas:3000`, make an account — the first one becomes the admin — pick the `claude-code` model, and start chatting. Anything it creates lands in your `workspace` folder.
 
@@ -82,8 +84,10 @@ Set `TTYD_USER` and `TTYD_PASS` in `.env`. This is a real shell behind a web pag
 Start it:
 
 ```
-sudo docker compose -f docker-compose.terminal.yml up -d --build
+sudo docker compose -f docker-compose.terminal.yml up -d
 ```
+
+This pulls the prebuilt image from GHCR. To build it yourself instead, add `--build`.
 
 Open `http://your-nas:7681`, log in, and you get a shell sitting in `workspace`. Type `claude` and you're in the normal Claude Code terminal — plan mode, permission prompts, slash commands, MCP, all of it.
 
@@ -101,16 +105,22 @@ Same toolbox as the terminal image, but reached over plain OpenSSH instead of a 
 2. Optionally set `SSH_PORT` in `.env` (default 2222), then:
 
    ```
-   sudo docker compose -f docker-compose.ssh.yml up -d --build
+   sudo docker compose -f docker-compose.ssh.yml up -d
    ```
+
+   (Pulls the prebuilt image; add `--build` to build it yourself.)
 
 3. Connect: `ssh -p 2222 claude@your-nas` (the username is always `claude`; inside it runs as your `PUID`). The host key is generated on first start and kept in `config/ssh/`, so it stays stable across image updates.
 
 Password auth is off, sshd runs as your non-root `PUID` with all capabilities dropped, and it only sees `workspace` and `config` like the other variants.
 
+## Building it yourself
+
+The compose files pull prebuilt images from GHCR by default, so a plain `up -d` never compiles anything. If you'd rather build from source (e.g. you changed a Dockerfile), append `--build` to any of the compose commands above — compose then builds from `bridge/`, `ttyd/`, or `ssh/` and tags the result under the same image name, so later `up -d` runs keep using your local build until you `docker compose pull` again.
+
 ## Run it from the registry (Portainer)
 
-You don't have to build on the NAS. Every push to `main` kicks off a GitHub Actions workflow (`.github/workflows/build.yml`) that builds both images for amd64 and arm64 and pushes them to GitHub's container registry:
+Every push to `main` kicks off a GitHub Actions workflow (`.github/workflows/build.yml`) that builds the images for amd64 and arm64 and pushes them to GitHub's container registry:
 
 - `ghcr.io/dluxhu/claude-nas-bridge`
 - `ghcr.io/dluxhu/claude-nas-terminal`
