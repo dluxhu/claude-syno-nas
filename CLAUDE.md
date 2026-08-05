@@ -21,6 +21,7 @@ docker-compose.terminal.yml   # terminal: ttyd (:7681)
 .env.example                  # shared config (token, PUID/PGID, paths, per-variant secrets)
 bridge/  server.js Dockerfile package.json   # chat bridge (built-in http + @anthropic-ai/claude-agent-sdk)
 ttyd/    Dockerfile entrypoint.sh            # ttyd static binary + real @anthropic-ai/claude-code CLI
+ssh/     Dockerfile entrypoint.sh            # key-only OpenSSH variant (no ttyd); non-root sshd via nss_wrapper
 .github/workflows/build.yml   # CI: multi-arch build of both images -> GHCR on push to main
 portainer/  chat-stack.yml terminal-stack.yml   # image-based composes for Portainer (pull from GHCR)
 ```

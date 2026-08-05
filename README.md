@@ -93,12 +93,28 @@ The first time you start `claude` here it'll ask you to log in — choose the su
 
 It's a shell with your token in it, so keep the password on. If you want to reach it from outside your house, put it behind Synology's reverse proxy with HTTPS or a VPN rather than forwarding port 7681 straight to the internet.
 
+## Option C — SSH
+
+Same toolbox as the terminal image, but reached over plain OpenSSH instead of a browser — so you can use your own terminal, `scp`/`sftp`, or VS Code Remote-SSH. There is deliberately no ttyd in this image; key-only sshd is the sole way in.
+
+1. Put your public key(s) in `config/ssh/authorized_keys` (the container refuses to start without one).
+2. Optionally set `SSH_PORT` in `.env` (default 2222), then:
+
+   ```
+   sudo docker compose -f docker-compose.ssh.yml up -d --build
+   ```
+
+3. Connect: `ssh -p 2222 claude@your-nas` (the username is always `claude`; inside it runs as your `PUID`). The host key is generated on first start and kept in `config/ssh/`, so it stays stable across image updates.
+
+Password auth is off, sshd runs as your non-root `PUID` with all capabilities dropped, and it only sees `workspace` and `config` like the other variants.
+
 ## Run it from the registry (Portainer)
 
 You don't have to build on the NAS. Every push to `main` kicks off a GitHub Actions workflow (`.github/workflows/build.yml`) that builds both images for amd64 and arm64 and pushes them to GitHub's container registry:
 
 - `ghcr.io/dluxhu/claude-nas-bridge`
 - `ghcr.io/dluxhu/claude-nas-terminal`
+- `ghcr.io/dluxhu/claude-nas-ssh` (Portainer stack: `portainer/ssh-stack.yml`)
 
 After the first build finishes, make those two packages public (GitHub → your profile → Packages → the package → Package settings → Change visibility → Public) so the NAS can pull them without logging in. If you'd rather keep them private, add `ghcr.io` as a registry in Portainer with a personal access token instead.
 

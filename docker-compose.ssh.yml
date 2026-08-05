@@ -1,0 +1,43 @@
+# SSH variant — the same toolbox as the terminal image, but reached over plain
+# OpenSSH (key-only) instead of a web page. No ttyd inside.
+# Deploy:  docker compose -f docker-compose.ssh.yml up -d --build
+#
+# Before first start: put your public key(s) in <CONFIG_DIR>/ssh/authorized_keys.
+# Connect:            ssh -p ${SSH_PORT:-2222} claude@your-nas
+name: claude-nas-ssh
+
+services:
+  ssh:
+    build: ./ssh
+    container_name: claude-ssh
+    restart: unless-stopped
+    # Run as the NAS user that owns your shared folders (correct file ownership;
+    # also keeps everything non-root — sshd included).
+    user: "${PUID}:${PGID}"
+    environment:
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
+      - DISABLE_AUTOUPDATER=1
+    ports:
+      # Outside port is configurable; sshd always listens on 2222 inside.
+      - "${SSH_PORT:-2222}:2222"
+    volumes:
+      # The ONLY directory the agent can see. This is the isolation.
+      - ${WORKSPACE_DIR}:/workspace
+      # Persists CLI config/auth, the ssh host key, and authorized_keys.
+      - ${CONFIG_DIR}:/config
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - claude-net
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/2222 && head -c 4 <&3 | grep -q SSH"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+networks:
+  claude-net:
+    driver: bridge

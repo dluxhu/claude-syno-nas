@@ -24,6 +24,9 @@ jobs:
           - name: terminal
             context: ./ttyd
             image: ghcr.io/${{ github.repository_owner }}/claude-nas-terminal
+          - name: ssh
+            context: ./ssh
+            image: ghcr.io/${{ github.repository_owner }}/claude-nas-ssh
     steps:
       - uses: actions/checkout@v4
 
