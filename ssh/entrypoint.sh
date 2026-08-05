@@ -62,7 +62,7 @@ chmod 600 "${HOST_KEY}" 2>/dev/null || true
   echo "StrictModes no"
   echo "Subsystem sftp internal-sftp"
   # NB: sshd only honors the FIRST SetEnv directive — keep this one line.
-  setenv="HOME=/config DISABLE_AUTOUPDATER=1 LD_PRELOAD=${LD_PRELOAD} NSS_WRAPPER_PASSWD=${NSS_WRAPPER_PASSWD} NSS_WRAPPER_GROUP=${NSS_WRAPPER_GROUP}"
+  setenv="HOME=/config LANG=C.UTF-8 DISABLE_AUTOUPDATER=1 LD_PRELOAD=${LD_PRELOAD} NSS_WRAPPER_PASSWD=${NSS_WRAPPER_PASSWD} NSS_WRAPPER_GROUP=${NSS_WRAPPER_GROUP}"
   if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
     setenv="${setenv} CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}"
   fi

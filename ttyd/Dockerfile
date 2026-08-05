@@ -51,6 +51,11 @@ RUN GROK_BIN_DIR=/usr/local/bin bash -c \
     && rm -rf /root/.grok \
     && grok --version
 
+# UTF-8 locale + 256color/truecolor tmux, or TUIs (Claude Code's ascii art)
+# render garbled inside tmux.
+ENV LANG=C.UTF-8
+RUN printf 'set -g default-terminal "tmux-256color"\nset -ga terminal-overrides ",*:Tc"\n' > /etc/tmux.conf
+
 # Claude Code writes config/auth under $HOME/.claude — persist via the /config mount.
 ENV HOME=/config
 WORKDIR /workspace
