@@ -4,12 +4,13 @@
 # and optional deps must NOT be skipped.
 FROM node:20-bookworm-slim
 
-# System tools Claude Code expects (git for repos, ripgrep for search).
+# System tools Claude Code expects (git for repos, ripgrep for search, jq for JSON).
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git \
       ca-certificates \
       ripgrep \
       curl \
+      jq \
     && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production

@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
       ripgrep \
       curl \
+      jq \
       bash \
       libevent-core-2.1-7 \
       libutf8proc2 \
