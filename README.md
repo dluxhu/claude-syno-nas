@@ -87,6 +87,8 @@ sudo docker compose -f docker-compose.terminal.yml up -d --build
 
 Open `http://your-nas:7681`, log in, and you get a shell sitting in `workspace`. Type `claude` and you're in the normal Claude Code terminal — plan mode, permission prompts, slash commands, MCP, all of it.
 
+The image also ships `tmux`, the GitHub CLI (`gh`), xAI's Grok Build (`grok`), and the Cline CLI (`cline`). Their auth/config lives under the mounted `config` folder, so logins (`gh auth login`, `grok login`, etc.) survive container restarts.
+
 The first time you start `claude` here it'll ask you to log in — choose the subscription option and do the one-time browser login. After that it's remembered, because the config lives in the `config` folder you mounted, so you go straight to the prompt from then on. (The token in `.env` covers the chat option and any headless `claude -p` you run in this shell — those work right away.)
 
 It's a shell with your token in it, so keep the password on. If you want to reach it from outside your house, put it behind Synology's reverse proxy with HTTPS or a VPN rather than forwarding port 7681 straight to the internet.
@@ -95,8 +97,8 @@ It's a shell with your token in it, so keep the password on. If you want to reac
 
 You don't have to build on the NAS. Every push to `main` kicks off a GitHub Actions workflow (`.github/workflows/build.yml`) that builds both images for amd64 and arm64 and pushes them to GitHub's container registry:
 
-- `ghcr.io/pawisoon/claude-nas-bridge`
-- `ghcr.io/pawisoon/claude-nas-terminal`
+- `ghcr.io/dluxhu/claude-nas-bridge`
+- `ghcr.io/dluxhu/claude-nas-terminal`
 
 After the first build finishes, make those two packages public (GitHub → your profile → Packages → the package → Package settings → Change visibility → Public) so the NAS can pull them without logging in. If you'd rather keep them private, add `ghcr.io` as a registry in Portainer with a personal access token instead.
 
@@ -124,7 +126,7 @@ Portainer → **Stacks → Add stack** → name it `claude-nas-terminal` → pas
 ```yaml
 services:
   terminal:
-    image: ghcr.io/pawisoon/claude-nas-terminal:latest
+    image: ghcr.io/dluxhu/claude-nas-terminal:latest
     container_name: claude-terminal
     restart: unless-stopped
     user: "${PUID}:${PGID}"
@@ -156,7 +158,7 @@ Same steps, named `claude-nas-chat`:
 ```yaml
 services:
   bridge:
-    image: ghcr.io/pawisoon/claude-nas-bridge:latest
+    image: ghcr.io/dluxhu/claude-nas-bridge:latest
     container_name: claude-bridge
     restart: unless-stopped
     user: "${PUID}:${PGID}"

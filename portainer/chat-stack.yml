@@ -15,7 +15,7 @@
 
 services:
   bridge:
-    image: ghcr.io/pawisoon/claude-nas-bridge:latest
+    image: ghcr.io/dluxhu/claude-nas-bridge:latest
     container_name: claude-bridge
     restart: unless-stopped
     user: "${PUID}:${PGID}"

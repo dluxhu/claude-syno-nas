@@ -14,7 +14,7 @@
 
 services:
   terminal:
-    image: ghcr.io/pawisoon/claude-nas-terminal:latest
+    image: ghcr.io/dluxhu/claude-nas-terminal:latest
     container_name: claude-terminal
     restart: unless-stopped
     user: "${PUID}:${PGID}"

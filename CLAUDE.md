@@ -8,7 +8,7 @@ front-ends sharing the same sandbox + auth. See [README.md](README.md) for the f
 
 ## Git / commits — IMPORTANT
 
-- Author all commits, pushes, and PR descriptions **as the user only (pawisoon)**.
+- Author all commits, pushes, and PR descriptions **as the user only (dluxhu)**.
 - **Never** add `Co-Authored-By: Claude`, "🤖 Generated with Claude Code", or any other
   AI/assistant attribution to commit messages or PRs.
 - Use the user's configured git identity; do not change it.
@@ -28,7 +28,7 @@ portainer/  chat-stack.yml terminal-stack.yml   # image-based composes for Porta
 ## Shipping / CI
 
 - `.github/workflows/build.yml` builds `claude-nas-bridge` + `claude-nas-terminal` for amd64+arm64 and pushes to
-  `ghcr.io/pawisoon/*` on every push to main (+ `v*` tags). Uses GITHUB_TOKEN, `packages: write`.
+  `ghcr.io/dluxhu/*` on every push to main (+ `v*` tags). Uses GITHUB_TOKEN, `packages: write`.
 - Make the GHCR packages **public** after first build, or add ghcr creds in Portainer.
 - Local dev still uses the `build:` composes; Portainer/prod uses the image-based `portainer/` composes.
 
