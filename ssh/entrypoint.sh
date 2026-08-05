@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Running as root means PUID/PGID never made it into the deploy (sshd would
+# also demand privsep setup we deliberately don't ship). Fail loud and early.
+if [ "$(id -u)" = "0" ]; then
+  echo "ERROR: container is running as root. Set PUID and PGID in your env" >&2
+  echo "(user: \"\${PUID}:\${PGID}\" in the compose/stack) and redeploy." >&2
+  exit 1
+fi
+
 SSH_DIR=/config/ssh
 AUTH_KEYS="${SSH_DIR}/authorized_keys"
 
