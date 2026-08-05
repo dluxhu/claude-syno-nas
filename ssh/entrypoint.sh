@@ -31,10 +31,20 @@ export LD_PRELOAD
 
 # Host key: generated once into /config so the host identity survives image
 # updates and you don't get MITM warnings after every pull.
-if [ ! -f "${SSH_DIR}/ssh_host_ed25519_key" ]; then
-  ssh-keygen -q -t ed25519 -N '' -f "${SSH_DIR}/ssh_host_ed25519_key"
+HOST_KEY="${SSH_DIR}/ssh_host_ed25519_key"
+# A key we can't read (e.g. left behind by an accidental root run) is useless —
+# regenerate it. Clients that saw the old key will get a host-key-changed warning.
+if [ -f "${HOST_KEY}" ] && [ ! -r "${HOST_KEY}" ]; then
+  echo "WARN: ${HOST_KEY} exists but is not readable by uid $(id -u) — regenerating." >&2
+  rm -f "${HOST_KEY}" "${HOST_KEY}.pub" || {
+    echo "ERROR: cannot replace ${HOST_KEY}; fix ownership of ${SSH_DIR} (chown to your PUID)." >&2
+    exit 1
+  }
 fi
-chmod 600 "${SSH_DIR}/ssh_host_ed25519_key" 2>/dev/null || true
+if [ ! -f "${HOST_KEY}" ]; then
+  ssh-keygen -q -t ed25519 -N '' -f "${HOST_KEY}"
+fi
+chmod 600 "${HOST_KEY}" 2>/dev/null || true
 
 # sshd wipes the environment for sessions, so container env the CLIs need is
 # re-injected via SetEnv (nss_wrapper included, so `whoami` etc. work in-session).
