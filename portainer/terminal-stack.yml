@@ -1,15 +1,23 @@
-# Portainer stack — TERMINAL (ttyd: real Claude Code TUI in a browser), pulling from GHCR.
+# Portainer stack — TERMINAL (one image, two doors: ttyd web terminal and/or
+# key-only OpenSSH), pulling from GHCR.
 #
 # Portainer → Stacks → Add stack → name it "claude-nas-terminal" → paste this in the
 # web editor → fill the Environment variables (below) → Deploy.
 #
+# The agent CLIs are NOT in the image — after first start, open a shell inside
+# (web terminal or ssh) and run `install-agents all` (or claude/grok/cline).
+#
+# For ssh: put your public key(s) in <HOME_DIR>/.ssh/authorized_keys first,
+# then connect with `ssh -p <SSH_PORT> claude@your-nas`.
+#
 # Env vars to set in Portainer:
 #   PUID, PGID                  e.g. 1026 / 100  (run `id` on the NAS)
 #   CLAUDE_CODE_OAUTH_TOKEN     from `claude setup-token`
-#   TTYD_USER, TTYD_PASS        web-terminal login (it's a real shell — use a strong pass)
-#   WORKSPACE_DIR               /volume1/docker/claude-nas/workspace
-#   CONFIG_DIR                  /volume1/docker/claude-nas/config
+#   HOME_DIR                    /volume1/docker/claude-nas/home
+#   TTYD, SSHD                  set 1 to enable each door (at least one required)
+#   TTYD_USER, TTYD_PASS        web-terminal login (required when TTYD=1 — it's a real shell)
 #   TTYD_PORT                   7681
+#   SSH_PORT                    2222
 #   TTYD_SHELL (optional)       bash (default) or claude
 
 services:
@@ -20,20 +28,21 @@ services:
     user: "${PUID}:${PGID}"
     environment:
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
-      - TTYD_USER=${TTYD_USER}
-      - TTYD_PASS=${TTYD_PASS}
+      - TTYD=${TTYD:-}
+      - SSHD=${SSHD:-}
+      - TTYD_USER=${TTYD_USER:-}
+      - TTYD_PASS=${TTYD_PASS:-}
       - TTYD_SHELL=${TTYD_SHELL:-bash}
-      - DISABLE_AUTOUPDATER=1
     ports:
       - "${TTYD_PORT:-7681}:7681"
+      - "${SSH_PORT:-2222}:2222"
     volumes:
-      - ${WORKSPACE_DIR}:/workspace
-      - ${CONFIG_DIR}:/config
+      - ${HOME_DIR}:/home
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     networks: [claude-net]
     healthcheck:
-      test: ["CMD", "bash", "-c", "curl -s -o /dev/null http://localhost:7681 || exit 1"]
+      test: ["CMD", "healthcheck.sh"]
       interval: 30s
       timeout: 5s
       retries: 3

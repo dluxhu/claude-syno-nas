@@ -7,8 +7,7 @@
 #   PUID, PGID                  e.g. 1026 / 100  (run `id` on the NAS)
 #   CLAUDE_CODE_OAUTH_TOKEN     from `claude setup-token`
 #   BRIDGE_API_KEY              any long random string
-#   WORKSPACE_DIR               /volume1/docker/claude-nas/workspace
-#   CONFIG_DIR                  /volume1/docker/claude-nas/config
+#   HOME_DIR                    /volume1/docker/claude-nas/home
 #   WEBUI_DATA_DIR              /volume1/docker/claude-nas/webui
 #   WEBUI_PORT                  3000
 #   CLAUDE_MODEL (optional)     sonnet | opus | haiku
@@ -29,8 +28,7 @@ services:
       - SHOW_TOOL_CALLS=${SHOW_TOOL_CALLS:-true}
       - MAX_TURNS=${MAX_TURNS:-40}
     volumes:
-      - ${WORKSPACE_DIR}:/workspace
-      - ${CONFIG_DIR}:/config
+      - ${HOME_DIR}:/home
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     networks: [claude-net]

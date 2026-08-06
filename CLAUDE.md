@@ -4,7 +4,8 @@ Dockerized **Claude Code** in a hardened sandbox on a **Synology NAS**, with **t
 front-ends sharing the same sandbox + auth. See [README.md](README.md) for the full walkthrough.
 
 1. **Chat** (`docker-compose.yml`) — Open WebUI → `bridge/` (OpenAI-compatible, Node + Agent SDK) → Claude Code.
-2. **Terminal** (`docker-compose.terminal.yml`) — `ttyd/` serves the real Claude Code TUI in a browser.
+2. **Terminal** (`docker-compose.terminal.yml`) — `terminal/` is ONE image with two doors:
+   ttyd web terminal (`TTYD=1`) and/or key-only OpenSSH (`SSHD=1`). Neither set → refuses to start.
 
 ## Git / commits — IMPORTANT
 
@@ -17,11 +18,10 @@ front-ends sharing the same sandbox + auth. See [README.md](README.md) for the f
 
 ```
 docker-compose.yml            # chat: open-webui + bridge (internal :8000, UI :3000)
-docker-compose.terminal.yml   # terminal: ttyd (:7681)
-.env.example                  # shared config (token, PUID/PGID, paths, per-variant secrets)
-bridge/  server.js Dockerfile package.json   # chat bridge (built-in http + @anthropic-ai/claude-agent-sdk)
-ttyd/    Dockerfile entrypoint.sh            # ttyd static binary + real @anthropic-ai/claude-code CLI
-ssh/     Dockerfile entrypoint.sh            # key-only OpenSSH variant (no ttyd); non-root sshd via nss_wrapper
+docker-compose.terminal.yml   # terminal: ttyd (:7681) and/or sshd (:2222), TTYD/SSHD select
+.env.example                  # shared config (token, PUID/PGID, HOME_DIR, EXTRA_PACKAGES, per-variant secrets)
+bridge/    server.js Dockerfile package.json                 # chat bridge (built-in http + @anthropic-ai/claude-agent-sdk)
+terminal/  Dockerfile entrypoint.sh healthcheck.sh install-agents   # merged ttyd+sshd image; nss_wrapper for non-root sshd
 .github/workflows/build.yml   # CI: multi-arch build of both images -> GHCR on push to main
 portainer/  chat-stack.yml terminal-stack.yml   # image-based composes for Portainer (pull from GHCR)
 ```
@@ -33,13 +33,19 @@ portainer/  chat-stack.yml terminal-stack.yml   # image-based composes for Porta
 - Make the GHCR packages **public** after first build, or add ghcr creds in Portainer.
 - Root composes declare both `image:` (GHCR, default — plain `up -d` pulls) and `build:`
   (`up -d --build` builds locally). Portainer uses the image-only `portainer/` composes.
+- `EXTRA_PACKAGES` build arg (both Dockerfiles): user-supplied apt packages, local `--build` only.
 
 ## Key facts
 
 - Both images ship their own Node → sidestep the Synology packaged-Node segfault.
-- Both run **non-root** (`user: PUID:PGID`), `cap_drop: ALL`, no Docker socket, mount only `/workspace` + `/config`.
+- Both run **non-root** (`user: PUID:PGID`), `cap_drop: ALL`, no Docker socket, mount only `HOME_DIR` → `/home`
+  ( = `$HOME`; single mount — CLI config/auth, installed agents, ssh keys, and projects all live in it).
+- Agent CLIs (`claude`, `grok`, `cline`) are **NOT in the terminal image** — users install them into `$HOME`
+  via the bundled `install-agents` script (`~/.local/bin` + `~/.npm-global/bin`, both on PATH), so they
+  self-update and survive image pulls. No `DISABLE_AUTOUPDATER` anymore.
+- sshd runs non-root via nss_wrapper; keys at `/home/.ssh/authorized_keys`, host key persisted alongside.
 - Build **on the NAS** so the arch matches: the Agent SDK pulls a native binary (don't skip optional deps),
-  and `ttyd/Dockerfile` downloads the ttyd static binary by arch (amd64→x86_64, arm64→aarch64).
+  and `terminal/Dockerfile` downloads the ttyd static binary by arch (amd64→x86_64, arm64→aarch64).
 - Auth: `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` (Pro/Max). Chat (headless) draws from the
   separate monthly Agent SDK credit pool; terminal (interactive) uses normal interactive allowance.
 - Chat caveat: no plan mode / permission prompts (runs `bypassPermissions`); terminal is 100% fidelity.
@@ -49,8 +55,7 @@ portainer/  chat-stack.yml terminal-stack.yml   # image-based composes for Porta
 
 ```bash
 sudo docker compose up -d                                      # chat (pulls GHCR; --build to build)
-sudo docker compose -f docker-compose.terminal.yml up -d       # terminal
-sudo docker compose -f docker-compose.ssh.yml up -d            # ssh
+sudo docker compose -f docker-compose.terminal.yml up -d       # terminal and/or ssh (TTYD=1 / SSHD=1 in .env)
 node --check bridge/server.js                                  # local sanity
 docker compose config                                          # validate compose
 ```

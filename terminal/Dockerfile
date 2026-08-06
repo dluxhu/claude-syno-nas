@@ -1,6 +1,10 @@
-# SSH variant: the same toolbox (claude, grok, cline, gh, tmux) reachable over
-# plain OpenSSH instead of a web terminal. No ttyd in this image on purpose —
-# key-only sshd is the sole way in.
+# Terminal image: one toolbox, two doors. Ships BOTH ttyd (web terminal) and
+# key-only OpenSSH; env vars pick what starts (TTYD=1 and/or SSHD=1 — neither
+# set means the container refuses to start).
+#
+# The coding-agent CLIs (claude, grok, cline) are deliberately NOT baked in.
+# The user installs them into $HOME (the /home mount) with `install-agents`,
+# where they persist across image updates and can self-update.
 
 # tmux 3.7b from source (bookworm ships 3.3a, which mishandles wide/unicode
 # chars in TUIs). utf8proc gives it correct character-width tables.
@@ -14,6 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && ./configure --enable-utf8proc && make -j"$(nproc)" && make install
 
 FROM node:22-bookworm-slim
+
+ARG TTYD_VERSION=1.7.7
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git \
@@ -55,6 +61,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && ln -s "$(command -v fdfind)" /usr/local/bin/fd
 
+# User-defined extra apt packages, resolved at build time:
+#   EXTRA_PACKAGES="golang htop" docker compose -f docker-compose.terminal.yml up -d --build
+ARG EXTRA_PACKAGES=
+RUN if [ -n "$EXTRA_PACKAGES" ]; then \
+      apt-get update \
+      && apt-get install -y --no-install-recommends $EXTRA_PACKAGES \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi
+
 # yq (mikefarah) — not in bookworm's repos; static binary by arch.
 ARG YQ_VERSION=v4.44.3
 RUN set -eux; \
@@ -62,10 +77,6 @@ RUN set -eux; \
       "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_$(dpkg --print-architecture)"; \
     chmod +x /usr/local/bin/yq; \
     yq --version
-
-# Let `pip install --user` work despite bookworm's PEP 668 guard. --user installs
-# land under $HOME (/config), so they persist across container restarts.
-ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 COPY --from=tmux-build /usr/local/bin/tmux /usr/local/bin/tmux
 
@@ -78,34 +89,40 @@ RUN set -eux; \
     apt-get update && apt-get install -y --no-install-recommends gh; \
     rm -rf /var/lib/apt/lists/*
 
-# Real Claude Code CLI + Cline CLI. Pin to the image (no auto-update mid-session).
-ENV DISABLE_AUTOUPDATER=1
-RUN npm install -g @anthropic-ai/claude-code cline && npm cache clean --force
+# ttyd static binary matching the build architecture (x86_64 or aarch64).
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in \
+      amd64) ttyd_arch=x86_64 ;; \
+      arm64) ttyd_arch=aarch64 ;; \
+      *) echo "unsupported arch: $arch" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /usr/local/bin/ttyd \
+      "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.${ttyd_arch}"; \
+    chmod +x /usr/local/bin/ttyd; \
+    ttyd --version
 
-# Grok Build (xAI's coding agent CLI). Installer picks the right arch binary,
-# but drops it under /root/.grok (0700) with only a symlink on PATH — replace
-# the symlink with the real file so non-root users can run it.
-RUN GROK_BIN_DIR=/usr/local/bin bash -c \
-      "curl -fsSL https://x.ai/cli/install.sh | bash" \
-    && cp -L /usr/local/bin/grok /usr/local/bin/grok.bin \
-    && mv /usr/local/bin/grok.bin /usr/local/bin/grok \
-    && chmod 755 /usr/local/bin/grok \
-    && rm -rf /root/.grok \
-    && grok --version
+# Everything user-installed lands in $HOME so it survives image updates:
+#  - `pip install --user` (PEP 668 guard off) → /home/.local
+#  - `npm install -g`                         → /home/.npm-global
+#  - the agent CLIs via install-agents        → /home/.local/bin + /home/.npm-global/bin
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+ENV NPM_CONFIG_PREFIX=/home/.npm-global
+ENV PATH="/home/.local/bin:/home/.npm-global/bin:${PATH}"
 
 # UTF-8 locale + 256color/truecolor tmux, or TUIs (Claude Code's ascii art)
 # render garbled inside tmux.
 ENV LANG=C.UTF-8
 RUN printf 'set -g default-terminal "tmux-256color"\nset -ga terminal-overrides ",*:Tc"\n' > /etc/tmux.conf
 
-# All CLIs write config/auth under $HOME — persist via the /config mount.
-ENV HOME=/config
-WORKDIR /workspace
+# $HOME is the single persistent mount: CLI config/auth, the agents themselves,
+# ssh keys, and whatever project layout the user wants inside it.
+ENV HOME=/home
+WORKDIR /home
 
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY entrypoint.sh healthcheck.sh install-agents /usr/local/bin/
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/healthcheck.sh /usr/local/bin/install-agents
 
-# sshd listens on a fixed high port (non-root can't bind <1024); map the
-# outside port you want in compose.
-EXPOSE 2222
+# 7681 = ttyd, 2222 = sshd (fixed high port; non-root can't bind <1024).
+EXPOSE 7681 2222
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

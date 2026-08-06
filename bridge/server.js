@@ -11,7 +11,7 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 
 const PORT = parseInt(process.env.PORT || "8000", 10);
 const BRIDGE_API_KEY = process.env.BRIDGE_API_KEY || "";
-const WORKSPACE = process.env.CLAUDE_WORKSPACE || "/workspace";
+const WORKSPACE = process.env.CLAUDE_WORKSPACE || "/home";
 const DEFAULT_MODEL = process.env.CLAUDE_MODEL || "sonnet";
 const PERMISSION_MODE = process.env.CLAUDE_PERMISSION_MODE || "bypassPermissions";
 const MAX_TURNS = parseInt(process.env.MAX_TURNS || "40", 10);

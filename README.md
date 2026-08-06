@@ -2,19 +2,21 @@
 
 Run Claude Code on a Synology NAS, in Docker, and use it from your browser instead of SSH-ing in every time.
 
-There are three front-ends, and they sit on top of the same sandbox:
+There are three ways in, and they sit on top of the same sandbox:
 
 - **Chat** — a chat website (Open WebUI) wired up to Claude Code. Handy for quick questions, using it from your phone, or letting other people in the house use it.
-- **Terminal** — the actual Claude Code terminal, served in a browser tab (ttyd). Everything Claude Code can do, exactly the way it works over SSH.
-- **SSH** — the same toolbox as the terminal, reached over key-only OpenSSH instead of a browser. Use your own terminal, `scp`/`sftp`, or VS Code Remote-SSH.
+- **Terminal** — the actual Claude Code terminal, served in a browser tab (ttyd).
+- **SSH** — the same box reached over key-only OpenSSH instead of a browser. Use your own terminal, `scp`/`sftp`, or VS Code Remote-SSH.
 
-Run any combination. Either way, the container can only see the one folder you mount into it — nothing else on the NAS.
+Terminal and SSH are the **same image and the same container** — two doors into one toolbox. You pick which door(s) to open with `TTYD=1` and/or `SSHD=1`; with neither set, the container refuses to start. The chat stack is separate, and you can run any combination. Either way, a container can only see the one folder you mount into it — nothing else on the NAS.
 
 ## Background
 
 People have been running Claude Code straight on DSM over SSH for a while. A recent DSM update broke that: Synology's bundled Node.js started segfaulting, and Claude Code would die a few seconds after launch. The fix that worked was to stop using Synology's Node.
 
 That's what these containers do — they bring their own Node, so DSM's copy never enters the picture and the crash doesn't happen. Running it in Docker also keeps it fenced in: an agent that gets a little too determined can only reach the folder you handed it, not the whole NAS.
+
+One design choice worth knowing: the coding agents themselves (`claude`, `grok`, `cline`) are **not baked into the terminal image**. You install them once into your home folder with a bundled helper, and from then on they live on the persistent mount — so they keep themselves up to date and survive image updates, instead of being pinned to whatever version the image was built with.
 
 ## What you need
 
@@ -23,6 +25,16 @@ That's what these containers do — they bring their own Node, so DSM's copy nev
 - SSH access for a couple of one-time commands.
 
 One thing on billing: the chat option runs Claude headless, which draws from the monthly Agent SDK credits included with your plan (separate from your normal interactive usage). The terminal option is interactive, so it uses your regular allowance.
+
+## The home folder
+
+There's exactly **one** folder to mount: `HOME_DIR`. Inside the container it becomes `/home`, and it's the home directory of the user everything runs as. It holds:
+
+- the agents you install (`~/.local`, `~/.npm-global`) and their config/auth (`~/.claude`, `~/.grok`, …) — logins survive restarts and image updates
+- ssh keys for the SSH door (`~/.ssh/authorized_keys`, plus the generated host key)
+- your projects — any layout you like: directly in the home folder, in `~/src`, wherever
+
+It's also the only thing the container can see, so it's the sandbox boundary: don't put anything in it you wouldn't hand to the agent.
 
 ## Setup
 
@@ -38,11 +50,11 @@ You only do this once.
 
 2. Copy this project onto the NAS, for example to `/volume1/docker/claude-nas`.
 
-3. Create the folders and make them yours (over SSH). The `webui` one is only needed for the chat option:
+3. Create the home folder and make it yours (over SSH). The `webui` one is only needed for the chat option:
 
    ```
-   sudo mkdir -p /volume1/docker/claude-nas/{workspace,config,webui}
-   sudo chown -R 1026:100 /volume1/docker/claude-nas/{workspace,config}
+   sudo mkdir -p /volume1/docker/claude-nas/{home,webui}
+   sudo chown -R 1026:100 /volume1/docker/claude-nas/home
    ```
 
    `1026:100` is the usual Synology admin user and group — run `id` to confirm yours.
@@ -56,7 +68,17 @@ You only do this once.
 
    Set your token, your user/group IDs, and the bits for whichever option you're running.
 
-`workspace` is the only folder Claude can read or write, so put the projects you want it to work on in there.
+### Migrating from the old two-folder layout
+
+Earlier versions mounted separate `workspace` and `config` folders. Now there's just the home folder. To keep your logins and projects:
+
+```
+sudo mv /volume1/docker/claude-nas/config /volume1/docker/claude-nas/home
+sudo mv /volume1/docker/claude-nas/workspace /volume1/docker/claude-nas/home/workspace
+sudo mv /volume1/docker/claude-nas/home/ssh /volume1/docker/claude-nas/home/.ssh   # ssh users only
+```
+
+Then set `HOME_DIR` in `.env` and redeploy. (Your old `config` folder was already `$HOME` inside the container, so `~/.claude`, `~/.grok` etc. carry over unchanged; the ssh keys move from `ssh/` to the standard `.ssh/`.)
 
 ## Option A — Chat
 
@@ -70,19 +92,22 @@ sudo docker compose up -d
 
 This pulls the prebuilt image from GHCR. To build it yourself instead, add `--build`.
 
-Open `http://your-nas:3000`, make an account — the first one becomes the admin — pick the `claude-code` model, and start chatting. Anything it creates lands in your `workspace` folder.
+Open `http://your-nas:3000`, make an account — the first one becomes the admin — pick the `claude-code` model, and start chatting. Anything it creates lands in your home folder.
 
 A few things to know about the chat option:
 
-- It's a chat box, so it can't show the "allow this command?" prompts the real Claude Code does. Instead it runs with those prompts off and does its work inside the sandbox. Don't put anything in `workspace` you wouldn't be happy for it to change.
+- It's a chat box, so it can't show the "allow this command?" prompts the real Claude Code does. Instead it runs with those prompts off and does its work inside the sandbox. Don't put anything in the home folder you wouldn't be happy for it to change.
 - Plan mode and slash commands aren't really a chat thing, so they're not here. Use the terminal option if you want them.
 - To let other people use it: there's no open sign-up once an admin exists, which is what you want. Add people under Admin Panel → Users, then turn the model on for them under Admin Panel → Settings → Models → `claude-code` → Access → Public. Miss that last step and they'll just see an empty model list.
 
-## Option B — Terminal
+## Option B — Terminal (web) and/or SSH
 
-Set `TTYD_USER` and `TTYD_PASS` in `.env`. This is a real shell behind a web page, so give it a real password. (Set `TTYD_SHELL=claude` if you'd rather land straight in Claude Code than at a shell prompt.)
+One container, two doors. In `.env`, open the ones you want:
 
-Start it:
+- `TTYD=1` — the web terminal. Also set `TTYD_USER` and `TTYD_PASS`; this is a real shell behind a web page, so give it a real password. (`TTYD_SHELL=claude` lands you straight in Claude Code instead of a shell prompt.)
+- `SSHD=1` — key-only OpenSSH. Put your public key(s) in `<HOME_DIR>/.ssh/authorized_keys` first; the ssh door refuses to start without one.
+
+Then:
 
 ```
 sudo docker compose -f docker-compose.terminal.yml up -d
@@ -90,34 +115,49 @@ sudo docker compose -f docker-compose.terminal.yml up -d
 
 This pulls the prebuilt image from GHCR. To build it yourself instead, add `--build`.
 
-Open `http://your-nas:7681`, log in, and you get a shell sitting in `workspace`. Type `claude` and you're in the normal Claude Code terminal — plan mode, permission prompts, slash commands, MCP, all of it.
+Get a shell inside:
 
-The image also ships `tmux`, the GitHub CLI (`gh`), xAI's Grok Build (`grok`), and the Cline CLI (`cline`), plus a developer toolbox agents lean on: `git`, `ripgrep`, `fd`, `jq`, `yq`, `curl`, `sqlite3`, `shellcheck`, `python3` (with `requests`, `pandas`, `numpy`, BeautifulSoup, and pip — `pip install --user` persists under `config`), and the usual archive, network, and editor utilities (`unzip`, `rsync`, `dig`, `nano`, `vim`, …). The chat backend's image carries the same toolbox minus the interactive-only bits, so the chat agent can use them too. Their auth/config lives under the mounted `config` folder, so logins (`gh auth login`, `grok login`, etc.) survive container restarts. The tmux is 3.7b built from source with utf8proc, and the image sets a UTF-8 locale plus `tmux-256color`/truecolor defaults — so Claude Code and other TUIs render correctly inside tmux instead of coming out garbled.
+- **Web:** open `http://your-nas:7681` and log in with `TTYD_USER`/`TTYD_PASS`.
+- **SSH:** `ssh -p 2222 claude@your-nas` (the username is always `claude`; inside it runs as your `PUID`). The host key is generated on first start and kept in `~/.ssh/`, so it stays stable across image updates. Password auth is off, and sshd itself runs as your non-root user.
 
-The first time you start `claude` here it'll ask you to log in — choose the subscription option and do the one-time browser login. After that it's remembered, because the config lives in the `config` folder you mounted, so you go straight to the prompt from then on. (The token in `.env` covers the chat option and any headless `claude -p` you run in this shell — those work right away.)
+### Install the agents (first run)
 
-It's a shell with your token in it, so keep the password on. If you want to reach it from outside your house, put it behind Synology's reverse proxy with HTTPS or a VPN rather than forwarding port 7681 straight to the internet.
+The agent CLIs aren't in the image — install the ones you want into your home folder, once:
 
-## Option C — SSH
+```
+install-agents all            # claude + grok + cline
+install-agents claude         # or pick individually: claude, grok, cline
+```
 
-Same toolbox as the terminal image, but reached over plain OpenSSH instead of a browser — so you can use your own terminal, `scp`/`sftp`, or VS Code Remote-SSH. There is deliberately no ttyd in this image; key-only sshd is the sole way in.
+They land under `~/.local` and `~/.npm-global` (both already on `PATH`), so they persist across restarts and image updates — and they keep themselves current: `claude` uses its own auto-updater, `grok` its installer, and `cline` updates with `npm update -g cline`.
 
-1. Put your public key(s) in `config/ssh/authorized_keys` (the container refuses to start without one).
-2. Optionally set `SSH_PORT` in `.env` (default 2222), then:
+The first time you start `claude` it'll ask you to log in — choose the subscription option and do the one-time browser login. After that it's remembered, because the config lives in your home folder. (The token in `.env` covers the chat option and any headless `claude -p` you run in this shell — those work right away.)
 
-   ```
-   sudo docker compose -f docker-compose.ssh.yml up -d
-   ```
+### What's in the box
 
-   (Pulls the prebuilt image; add `--build` to build it yourself.)
+The image ships `tmux`, the GitHub CLI (`gh`), and a developer toolbox agents lean on: `git`, `ripgrep`, `fd`, `jq`, `yq`, `curl`, `sqlite3`, `shellcheck`, `python3` (with `requests`, `pandas`, `numpy`, BeautifulSoup, and pip — `pip install --user` persists in your home folder), and the usual archive, network, and editor utilities (`unzip`, `rsync`, `dig`, `nano`, `vim`, …). The chat backend's image carries the same toolbox minus the interactive-only bits. The tmux is 3.7b built from source with utf8proc, and the image sets a UTF-8 locale plus `tmux-256color`/truecolor defaults — so Claude Code and other TUIs render correctly inside tmux instead of coming out garbled.
 
-3. Connect: `ssh -p 2222 claude@your-nas` (the username is always `claude`; inside it runs as your `PUID`). The host key is generated on first start and kept in `config/ssh/`, so it stays stable across image updates.
+Missing something? Add your own packages at build time — see below.
 
-Password auth is off, sshd runs as your non-root `PUID` with all capabilities dropped, and it only sees `workspace` and `config` like the other variants.
+It's a shell with your token in it, so keep the password on. If you want to reach the web terminal from outside your house, put it behind Synology's reverse proxy with HTTPS or a VPN rather than forwarding port 7681 straight to the internet.
+
+## Adding your own packages
+
+Both images take an `EXTRA_PACKAGES` build argument — a space-separated list of extra Debian packages baked in at build time. Set it in `.env` and build locally:
+
+```
+EXTRA_PACKAGES=golang htop imagemagick
+```
+
+```
+sudo docker compose -f docker-compose.terminal.yml up -d --build
+```
+
+It only takes effect when you build (`--build`); the prebuilt GHCR images are the stock package set. Your local build keeps being used on later `up -d` runs until you `docker compose pull` again. (For things that don't need to be system-wide, you may not need a rebuild at all: `pip install --user` and `npm install -g` both land in your home folder and persist.)
 
 ## Building it yourself
 
-The compose files pull prebuilt images from GHCR by default, so a plain `up -d` never compiles anything. If you'd rather build from source (e.g. you changed a Dockerfile), append `--build` to any of the compose commands above — compose then builds from `bridge/`, `ttyd/`, or `ssh/` and tags the result under the same image name, so later `up -d` runs keep using your local build until you `docker compose pull` again.
+The compose files pull prebuilt images from GHCR by default, so a plain `up -d` never compiles anything. If you'd rather build from source (e.g. you changed a Dockerfile, or you set `EXTRA_PACKAGES`), append `--build` to any of the compose commands above — compose then builds from `bridge/` or `terminal/` and tags the result under the same image name, so later `up -d` runs keep using your local build until you `docker compose pull` again.
 
 ## Run it from the registry (Portainer)
 
@@ -125,7 +165,6 @@ Every push to `main` kicks off a GitHub Actions workflow (`.github/workflows/bui
 
 - `ghcr.io/dluxhu/claude-nas-bridge`
 - `ghcr.io/dluxhu/claude-nas-terminal`
-- `ghcr.io/dluxhu/claude-nas-ssh` (Portainer stack: `portainer/ssh-stack.yml`)
 
 After the first build finishes, make those packages public (GitHub → your profile → Packages → the package → Package settings → Change visibility → Public) so the NAS can pull them without logging in. If you'd rather keep them private, add `ghcr.io` as a registry in Portainer with a personal access token instead.
 
@@ -134,21 +173,20 @@ After the first build finishes, make those packages public (GitHub → your prof
 Over SSH on the NAS (skip `webui` if you only run the terminal stack):
 
 ```
-sudo mkdir -p /volume1/docker/claude-nas/{workspace,config,webui}
-sudo chown -R 1026:100 /volume1/docker/claude-nas/{workspace,config}
+sudo mkdir -p /volume1/docker/claude-nas/{home,webui}
+sudo chown -R 1026:100 /volume1/docker/claude-nas/home
 ```
 
 | Folder | Mounted at | What it holds |
 |---|---|---|
-| `workspace` | `/workspace` | the only place Claude can read/write — your projects, or point it elsewhere (below) |
-| `config` | `/config` | Claude's settings and login, kept between restarts |
+| `home` | `/home` | the only place the agent can read/write — its config/logins, the installed agents, ssh keys, and your projects |
 | `webui` | Open WebUI data | the chat UI's database (chat stack only) |
 
-`workspace` and `config` mount **read-write**, and must be owned by the `PUID:PGID` the container runs as — `1026:100` is the usual Synology admin user/group (run `id` to confirm yours). To point Claude at something else, like a media library, set `WORKSPACE_DIR` to that share instead of the `workspace` folder and make sure that user can write there.
+`home` mounts **read-write** and must be owned by the `PUID:PGID` the container runs as — `1026:100` is the usual Synology admin user/group (run `id` to confirm yours). To give the agent a different working area, like a media library, point `HOME_DIR` at a folder that contains (or links to) it and make sure that user can write there.
 
 ### Terminal stack
 
-Portainer → **Stacks → Add stack** → name it `claude-nas-terminal` → paste this → fill the environment variables → **Deploy**.
+Portainer → **Stacks → Add stack** → name it `claude-nas-terminal` → paste `portainer/terminal-stack.yml` (or the below) → fill the environment variables → **Deploy**.
 
 ```yaml
 services:
@@ -159,15 +197,16 @@ services:
     user: "${PUID}:${PGID}"
     environment:
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
-      - TTYD_USER=${TTYD_USER}
-      - TTYD_PASS=${TTYD_PASS}
+      - TTYD=${TTYD:-}
+      - SSHD=${SSHD:-}
+      - TTYD_USER=${TTYD_USER:-}
+      - TTYD_PASS=${TTYD_PASS:-}
       - TTYD_SHELL=${TTYD_SHELL:-bash}
-      - DISABLE_AUTOUPDATER=1
     ports:
       - "${TTYD_PORT:-7681}:7681"
+      - "${SSH_PORT:-2222}:2222"
     volumes:
-      - ${WORKSPACE_DIR}:/workspace
-      - ${CONFIG_DIR}:/config
+      - ${HOME_DIR}:/home
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     networks: [claude-net]
@@ -176,7 +215,7 @@ networks:
     driver: bridge
 ```
 
-Environment variables: `PUID`, `PGID`, `CLAUDE_CODE_OAUTH_TOKEN`, `TTYD_USER`, `TTYD_PASS`, `WORKSPACE_DIR`, `CONFIG_DIR`, `TTYD_PORT`.
+Environment variables: `PUID`, `PGID`, `CLAUDE_CODE_OAUTH_TOKEN`, `HOME_DIR`, `TTYD`/`SSHD` (at least one set to `1`), `TTYD_USER`, `TTYD_PASS`, `TTYD_PORT`, `SSH_PORT`.
 
 ### Chat stack
 
@@ -199,8 +238,7 @@ services:
       - SHOW_TOOL_CALLS=${SHOW_TOOL_CALLS:-true}
       - MAX_TURNS=${MAX_TURNS:-40}
     volumes:
-      - ${WORKSPACE_DIR}:/workspace
-      - ${CONFIG_DIR}:/config
+      - ${HOME_DIR}:/home
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     networks: [claude-net]
@@ -232,19 +270,17 @@ networks:
     driver: bridge
 ```
 
-Environment variables: `PUID`, `PGID`, `CLAUDE_CODE_OAUTH_TOKEN`, `BRIDGE_API_KEY`, `WORKSPACE_DIR`, `CONFIG_DIR`, `WEBUI_DATA_DIR`, `WEBUI_PORT`.
+Environment variables: `PUID`, `PGID`, `CLAUDE_CODE_OAUTH_TOKEN`, `BRIDGE_API_KEY`, `HOME_DIR`, `WEBUI_DATA_DIR`, `WEBUI_PORT`.
 
 ### Ports and Synology reverse proxy
-
-Each stack publishes one port on the NAS:
 
 | Stack | NAS port (env) | → container | What it serves |
 |---|---|---|---|
 | Chat | `WEBUI_PORT` (default 3000) | open-webui `:8080` | the chat website |
-| Terminal | `TTYD_PORT` (default 7681) | terminal `:7681` | the web terminal |
-| SSH | `SSH_PORT` (default 2222) | ssh `:2222` | key-only sshd |
+| Terminal | `TTYD_PORT` (default 7681) | terminal `:7681` | the web terminal (when `TTYD=1`) |
+| Terminal | `SSH_PORT` (default 2222) | terminal `:2222` | key-only sshd (when `SSHD=1`) |
 
-The chat stack's `bridge` has **no** published port on purpose — only Open WebUI reaches it, over the internal network. Leave it that way.
+The terminal stack maps both ports; a door you haven't enabled simply refuses connections. The chat stack's `bridge` has **no** published port on purpose — only Open WebUI reaches it, over the internal network. Leave it that way.
 
 To serve either over HTTPS at a hostname, use Synology's reverse proxy — **Control Panel → Login Portal → Advanced → Reverse Proxy → Create**:
 
@@ -256,17 +292,17 @@ Then reach it at `https://claude.example.com` instead of the raw port. Keep 3000
 
 ### Rolling out updates
 
-New commits to `main` rebuild and push `:latest`. To deploy one, hit **Pull and redeploy** on the stack. For hands-off updates, enable the stack's webhook in Portainer and have the workflow ping it after a build, or run Watchtower against the containers.
+New commits to `main` rebuild and push `:latest`. To deploy one, hit **Pull and redeploy** on the stack. For hands-off updates, enable the stack's webhook in Portainer and have the workflow ping it after a build, or run Watchtower against the containers. Your agents and their logins live in the home folder, so an image update doesn't touch them.
 
 ## How it's locked down
 
-All three variants run the same way:
+All variants run the same way:
 
-- Only `workspace` is mounted in, so the container can't see the rest of the NAS.
+- Only the home folder is mounted in, so the container can't see the rest of the NAS.
 - It runs as your normal user, not root — files stay editable from DSM, and nothing inside has root.
 - Linux capabilities are dropped and privilege escalation is turned off.
 - The Docker socket is not mounted, so it can't touch other containers or the host.
-- The chat backend isn't exposed on your network (only the web UI is, and it needs the shared key). The terminal sits behind its password. The SSH variant is key-only — password auth is off, and sshd itself runs as your non-root user.
+- The chat backend isn't exposed on your network (only the web UI is, and it needs the shared key). The web terminal sits behind its password. The ssh door is key-only — password auth is off, and sshd itself runs as your non-root user.
 
 Want the chat agent on a shorter leash? Set `CLAUDE_PERMISSION_MODE=dontAsk` and list only safe tools in `ALLOWED_TOOLS`, like `Read,Grep,Glob`. Then it can look but not touch.
 
@@ -278,41 +314,42 @@ Everything lives in `.env`:
 |---|---|---|
 | `CLAUDE_CODE_OAUTH_TOKEN` | both | Your token from `claude setup-token`. Required. |
 | `PUID` / `PGID` | both | The user and group the container runs as. |
-| `WORKSPACE_DIR` / `CONFIG_DIR` | both | Host folders mounted to `/workspace` and `/config`. |
+| `HOME_DIR` | both | The one host folder, mounted to `/home` ( = `$HOME`). |
+| `EXTRA_PACKAGES` | both | Extra Debian packages baked in when building with `--build`. |
 | `BRIDGE_API_KEY` | chat | Shared secret between the UI and the backend. Required. |
 | `WEBUI_DATA_DIR` / `WEBUI_PORT` | chat | Where the UI keeps its data / the port you open (default 3000). |
 | `CLAUDE_MODEL` | chat | `sonnet`, `opus`, `haiku`, or a full model id. |
 | `CLAUDE_PERMISSION_MODE` / `ALLOWED_TOOLS` | chat | Leave on default, or lock down with `dontAsk` + a tool list. |
 | `SHOW_TOOL_CALLS` / `MAX_TURNS` | chat | Show the agent's tool activity / cap how many steps per message. |
-| `TTYD_USER` / `TTYD_PASS` | terminal | The login for the web terminal. Required. |
-| `TTYD_PORT` | terminal | The port you open (default 7681). |
+| `TTYD` / `SSHD` | terminal | Set to `1` to enable the web terminal / the ssh door. At least one. |
+| `TTYD_USER` / `TTYD_PASS` | terminal | The login for the web terminal. Required when `TTYD=1`. |
+| `TTYD_PORT` | terminal | The web-terminal port you open (default 7681). |
 | `TTYD_SHELL` | terminal | `bash` (default) or `claude`. |
-| `SSH_PORT` | ssh | The host port sshd is reachable on (default 2222). |
+| `SSH_PORT` | terminal | The host port sshd is reachable on (default 2222). |
 
 ## Updating
 
-The compose files pull from GHCR, so updating is a pull away:
+The images update with a pull; the agents update themselves (they live in your home folder, not the image):
 
 ```
 # Chat
 sudo docker compose pull && sudo docker compose up -d
 
-# Terminal
+# Terminal / SSH
 sudo docker compose -f docker-compose.terminal.yml pull && sudo docker compose -f docker-compose.terminal.yml up -d
-
-# SSH
-sudo docker compose -f docker-compose.ssh.yml pull && sudo docker compose -f docker-compose.ssh.yml up -d
 ```
 
-If you build locally instead, swap `pull` for `build --no-cache` (or add `--build --no-cache` to `up`).
+If you build locally instead, swap `pull` for `build --no-cache` (or add `--build --no-cache` to `up`). To update the agents by hand: `claude` updates itself, and `install-agents` can always be re-run; `npm update -g cline` for cline.
 
 ## If something's off
 
 - Chat shows no models, or 401s: your `BRIDGE_API_KEY` doesn't match. Fix `.env` and redeploy.
 - A non-admin sees an empty model list: the model is still private — make it Public (see Option A).
+- The terminal container exits immediately with "neither TTYD=1 nor SSHD=1": that's the door selection — set at least one in `.env`.
+- `claude: command not found` in the shell: the agents aren't baked into the image — run `install-agents claude` (or `all`) once.
 - The terminal asks for a login: that's the `TTYD_USER` / `TTYD_PASS` prompt, working as intended.
 - Login errors in the logs: the token is wrong or expired. Run `claude setup-token` again, update `.env`, redeploy.
-- "raised permissions while running as root": your `PUID`/`PGID` are zero or the folders aren't owned by them. Re-run the `chown`.
+- "raised permissions while running as root": your `PUID`/`PGID` are zero or the folder isn't owned by them. Re-run the `chown`.
 - "Exec format error": the image was built for the wrong CPU. Build it on the NAS itself (`uname -m` to see your arch) and rebuild with `--no-cache`.
 - Logs: `sudo docker logs claude-bridge`, `claude-webui`, or `claude-terminal`.
 
@@ -320,13 +357,11 @@ If you build locally instead, swap `pull` for `build --no-cache` (or add `--buil
 
 ```
 docker-compose.yml            chat: Open WebUI + the backend
-docker-compose.terminal.yml   terminal: ttyd
-docker-compose.ssh.yml        ssh: key-only OpenSSH
+docker-compose.terminal.yml   terminal: ttyd and/or key-only OpenSSH (one image, TTYD/SSHD pick)
 .env.example                  config for all variants
 bridge/                       the chat backend (Node + the Claude Agent SDK)
-ttyd/                         the terminal (ttyd + the Claude Code CLI)
-ssh/                          the SSH variant (sshd + the same CLI toolbox)
-.github/workflows/build.yml   builds all three images and pushes them to GHCR on every push to main
+terminal/                     the terminal image (ttyd + sshd + toolbox; agents install to $HOME)
+.github/workflows/build.yml   builds both images and pushes them to GHCR on every push to main
 portainer/                    ready-to-paste Portainer stacks that pull those images
 ```
 

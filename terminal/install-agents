@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Install the coding-agent CLIs into $HOME (the persistent mount), where they
+# survive image updates and keep themselves up to date. Run it from a shell
+# inside the container (web terminal or ssh):
+#
+#   install-agents all              # claude + grok + cline
+#   install-agents claude cline     # just the ones you want
+#
+# claude → native installer into ~/.local (self-updating)
+# grok   → xAI installer into ~/.grok, launcher in ~/.local/bin
+# cline  → npm global install into ~/.npm-global (update: npm update -g cline)
+set -euo pipefail
+
+if [ $# -eq 0 ]; then
+  echo "Usage: install-agents all | [claude] [grok] [cline]" >&2
+  exit 1
+fi
+
+[ "$1" = "all" ] && set -- claude grok cline
+
+mkdir -p "${HOME}/.local/bin"
+
+for agent in "$@"; do
+  case "${agent}" in
+    claude)
+      echo "── installing claude (Claude Code) into ~/.local ──"
+      curl -fsSL https://claude.ai/install.sh | bash
+      ;;
+    grok)
+      echo "── installing grok (Grok Build) into ~/.grok ──"
+      GROK_BIN_DIR="${HOME}/.local/bin" bash -c \
+        "curl -fsSL https://x.ai/cli/install.sh | bash"
+      ;;
+    cline)
+      echo "── installing cline into ~/.npm-global ──"
+      npm install -g cline
+      ;;
+    *)
+      echo "ERROR: unknown agent '${agent}' (expected: claude, grok, cline)" >&2
+      exit 1
+      ;;
+  esac
+done
+
+echo "Done. ~/.local/bin and ~/.npm-global/bin are already on PATH."

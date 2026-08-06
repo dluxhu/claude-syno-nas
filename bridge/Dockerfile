@@ -39,6 +39,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && ln -s "$(command -v fdfind)" /usr/local/bin/fd
 
+# User-defined extra apt packages, resolved at build time:
+#   EXTRA_PACKAGES="golang htop" docker compose up -d --build
+ARG EXTRA_PACKAGES=
+RUN if [ -n "$EXTRA_PACKAGES" ]; then \
+      apt-get update \
+      && apt-get install -y --no-install-recommends $EXTRA_PACKAGES \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi
+
 # yq (mikefarah) — not in bookworm's repos; static binary by arch.
 ARG YQ_VERSION=v4.44.3
 RUN set -eux; \
@@ -48,13 +57,13 @@ RUN set -eux; \
     yq --version
 
 # Let `pip install --user` work despite bookworm's PEP 668 guard. --user installs
-# land under $HOME (/config), so they persist across container restarts.
+# land under $HOME (/home), so they persist across container restarts.
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 ENV NODE_ENV=production
 # Claude Code writes its config/state under $HOME/.claude — point it at the
-# /config mount so it persists and is writable by the non-root run user.
-ENV HOME=/config
+# /home mount so it persists and is writable by the non-root run user.
+ENV HOME=/home
 
 WORKDIR /app
 COPY package.json ./

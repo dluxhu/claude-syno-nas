@@ -1,6 +1,6 @@
 name: build-images
 
-# Build both images and push them to GHCR on every commit to main.
+# Build both images (bridge + terminal) and push them to GHCR on every commit to main.
 # Multi-arch (amd64 + arm64) so any Synology pulls the right one — no NAS build needed.
 on:
   push:
@@ -22,11 +22,8 @@ jobs:
             context: ./bridge
             image: ghcr.io/${{ github.repository_owner }}/claude-nas-bridge
           - name: terminal
-            context: ./ttyd
+            context: ./terminal
             image: ghcr.io/${{ github.repository_owner }}/claude-nas-terminal
-          - name: ssh
-            context: ./ssh
-            image: ghcr.io/${{ github.repository_owner }}/claude-nas-ssh
     steps:
       - uses: actions/checkout@v4
 
