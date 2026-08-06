@@ -2,7 +2,7 @@
 # key-only OpenSSH; env vars pick what starts (TTYD=1 and/or SSHD=1 — neither
 # set means the container refuses to start).
 #
-# The coding-agent CLIs (claude, grok, cline) are deliberately NOT baked in.
+# The coding-agent CLIs (claude, codex, gemini, …) are deliberately NOT baked in.
 # The user installs them into $HOME (the /home mount) with `install-agents`,
 # where they persist across image updates and can self-update.
 

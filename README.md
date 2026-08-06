@@ -16,7 +16,7 @@ People have been running Claude Code straight on DSM over SSH for a while. A rec
 
 That's what these containers do — they bring their own Node, so DSM's copy never enters the picture and the crash doesn't happen. Running it in Docker also keeps it fenced in: an agent that gets a little too determined can only reach the folder you handed it, not the whole NAS.
 
-One design choice worth knowing: the coding agents themselves (`claude`, `grok`, `cline`) are **not baked into the terminal image**. You install them once into your home folder with a bundled helper, and from then on they live on the persistent mount — so they keep themselves up to date and survive image updates, instead of being pinned to whatever version the image was built with.
+One design choice worth knowing: the coding agents themselves (`claude`, `codex`, `gemini`, and a dozen others) are **not baked into the terminal image**. You install them once into your home folder with a bundled helper, and from then on they live on the persistent mount — so they keep themselves up to date and survive image updates, instead of being pinned to whatever version the image was built with.
 
 ## What you need
 
@@ -125,11 +125,14 @@ Get a shell inside:
 The agent CLIs aren't in the image — install the ones you want into your home folder, once:
 
 ```
-install-agents all            # claude + grok + cline
-install-agents claude         # or pick individually: claude, grok, cline
+install-agents list           # see everything available
+install-agents claude codex   # pick the ones you want
+install-agents all            # or the whole zoo
 ```
 
-They land under `~/.local` and `~/.npm-global` (both already on `PATH`), so they persist across restarts and image updates — and they keep themselves current: `claude` uses its own auto-updater, `grok` its installer, and `cline` updates with `npm update -g cline`.
+The roster: `claude` (Claude Code), `grok` (Grok Build), `aider`, `goose` (Block), `cursor` (Cursor Agent), `droid` (Factory), `cline`, `codex` (OpenAI), `gemini` (Google), `copilot` (GitHub), `qwen` (Qwen Code), `opencode`, `amp`, `auggie` (Augment), and `crush` (Charm).
+
+They land under `~/.local` and `~/.npm-global` (both already on `PATH`), so they persist across restarts and image updates — and they keep themselves current: the vendor-installer ones (`claude`, `grok`, `aider`, `goose`, `cursor`, `droid`) self-update, and the npm ones update with `npm update -g` (or just re-run `install-agents`). Each agent has its own login/auth on first run.
 
 The first time you start `claude` it'll ask you to log in — choose the subscription option and do the one-time browser login. After that it's remembered, because the config lives in your home folder. (The token in `.env` covers the chat option and any headless `claude -p` you run in this shell — those work right away.)
 
@@ -339,7 +342,7 @@ sudo docker compose pull && sudo docker compose up -d
 sudo docker compose -f docker-compose.terminal.yml pull && sudo docker compose -f docker-compose.terminal.yml up -d
 ```
 
-If you build locally instead, swap `pull` for `build --no-cache` (or add `--build --no-cache` to `up`). To update the agents by hand: `claude` updates itself, and `install-agents` can always be re-run; `npm update -g cline` for cline.
+If you build locally instead, swap `pull` for `build --no-cache` (or add `--build --no-cache` to `up`). To update the agents by hand: the vendor-installer ones update themselves, and `install-agents` can always be re-run; the npm-installed ones take `npm update -g`.
 
 ## If something's off
 

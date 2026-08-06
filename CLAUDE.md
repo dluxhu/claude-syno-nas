@@ -40,7 +40,7 @@ portainer/  chat-stack.yml terminal-stack.yml   # image-based composes for Porta
 - Both images ship their own Node → sidestep the Synology packaged-Node segfault.
 - Both run **non-root** (`user: PUID:PGID`), `cap_drop: ALL`, no Docker socket, mount only `HOME_DIR` → `/home`
   ( = `$HOME`; single mount — CLI config/auth, installed agents, ssh keys, and projects all live in it).
-- Agent CLIs (`claude`, `grok`, `cline`) are **NOT in the terminal image** — users install them into `$HOME`
+- Agent CLIs (`claude`, `grok`, `codex`, `gemini`, … — `install-agents list` for all 15) are **NOT in the terminal image** — users install them into `$HOME`
   via the bundled `install-agents` script (`~/.local/bin` + `~/.npm-global/bin`, both on PATH), so they
   self-update and survive image pulls. No `DISABLE_AUTOUPDATER` anymore.
 - sshd runs non-root via nss_wrapper; keys at `/home/.ssh/authorized_keys`, host key persisted alongside.
