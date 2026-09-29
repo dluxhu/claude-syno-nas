@@ -90,6 +90,16 @@ if [ "${SSHD_ON}" = "1" ]; then
   } > /tmp/sshd_config
 fi
 
+# User startup hook: runs on every container start, as the container user,
+# before the terminal doors open. It runs in the background so a slow or
+# broken script cannot block the container. Output goes to a log in $HOME.
+STARTUP_SCRIPT="${HOME}/.config/startup.sh"
+if [ -f "${STARTUP_SCRIPT}" ]; then
+  STARTUP_LOG="${HOME}/.config/startup.log"
+  echo "[claude-terminal] running ${STARTUP_SCRIPT} (log: ${STARTUP_LOG})"
+  (cd "${HOME}" && nohup bash "${STARTUP_SCRIPT}" > "${STARTUP_LOG}" 2>&1 &)
+fi
+
 start_ttyd() {
   # What opens when you connect: 'bash' (default — a shell in $HOME, type `claude`)
   # or 'claude' to drop straight into the Claude Code TUI.

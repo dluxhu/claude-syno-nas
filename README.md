@@ -142,6 +142,10 @@ The image ships `tmux`, the GitHub CLI (`gh`), and a developer toolbox agents le
 
 Missing something? Add your own packages at build time — see below.
 
+### Startup script
+
+To run something every time the container starts, put a script at `<home folder>/.config/startup.sh`. It runs as your user (PUID:PGID), in your home folder, in the background, before the terminal and ssh open. Its output goes to `.config/startup.log` next to it. A common use is to start a tmux session that you attach to later with `tmux attach`.
+
 It's a shell with your token in it, so keep the password on. If you want to reach the web terminal from outside your house, put it behind Synology's reverse proxy with HTTPS or a VPN rather than forwarding port 7681 straight to the internet.
 
 ## Adding your own packages
