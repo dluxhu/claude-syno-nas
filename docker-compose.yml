@@ -12,7 +12,7 @@ services:
       args:
         # Extra apt packages baked in at build time, e.g. EXTRA_PACKAGES="golang htop"
         EXTRA_PACKAGES: ${EXTRA_PACKAGES:-}
-    container_name: claude-bridge
+    container_name: ${BRIDGE_CONTAINER_NAME:-claude-bridge}
     restart: unless-stopped
     # Run as the NAS user that owns your shared folders, so files land with
     # correct ownership. Also satisfies Claude Code's refusal to bypass
@@ -51,7 +51,7 @@ services:
   # ── The chat UI (Ollama-style) ──────────────────────────────────────────────
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
-    container_name: claude-webui
+    container_name: ${WEBUI_CONTAINER_NAME:-claude-webui}
     restart: unless-stopped
     depends_on:
       - bridge
