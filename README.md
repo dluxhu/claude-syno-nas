@@ -199,7 +199,7 @@ Portainer → **Stacks → Add stack** → name it `claude-nas-terminal` → pas
 services:
   terminal:
     image: ghcr.io/dluxhu/claude-nas-terminal:latest
-    container_name: claude-terminal
+    container_name: ${TERMINAL_CONTAINER_NAME:-claude-terminal}
     restart: unless-stopped
     user: "${PUID}:${PGID}"
     environment:
@@ -232,7 +232,7 @@ Same steps, named `claude-nas-chat`:
 services:
   bridge:
     image: ghcr.io/dluxhu/claude-nas-bridge:latest
-    container_name: claude-bridge
+    container_name: ${BRIDGE_CONTAINER_NAME:-claude-bridge}
     restart: unless-stopped
     user: "${PUID}:${PGID}"
     environment:
@@ -257,7 +257,7 @@ services:
       start_period: 20s
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
-    container_name: claude-webui
+    container_name: ${WEBUI_CONTAINER_NAME:-claude-webui}
     restart: unless-stopped
     depends_on: [bridge]
     ports:
@@ -328,11 +328,13 @@ Everything lives in `.env`:
 | `CLAUDE_MODEL` | chat | `sonnet`, `opus`, `haiku`, or a full model id. |
 | `CLAUDE_PERMISSION_MODE` / `ALLOWED_TOOLS` | chat | Leave on default, or lock down with `dontAsk` + a tool list. |
 | `SHOW_TOOL_CALLS` / `MAX_TURNS` | chat | Show the agent's tool activity / cap how many steps per message. |
+| `BRIDGE_CONTAINER_NAME` / `WEBUI_CONTAINER_NAME` | chat | The container names (default `claude-bridge` / `claude-webui`). |
 | `TTYD` / `SSHD` | terminal | Set to `1` to enable the web terminal / the ssh door. At least one. |
 | `TTYD_USER` / `TTYD_PASS` | terminal | The login for the web terminal. Required when `TTYD=1`. |
 | `TTYD_PORT` | terminal | The web-terminal port you open (default 7681). |
 | `TTYD_SHELL` | terminal | `bash` (default) or `claude`. |
 | `SSH_PORT` | terminal | The host port sshd is reachable on (default 2222). |
+| `TERMINAL_CONTAINER_NAME` | terminal | The container name (default `claude-terminal`). |
 
 ## Updating
 
@@ -358,7 +360,7 @@ If you build locally instead, swap `pull` for `build --no-cache` (or add `--buil
 - Login errors in the logs: the token is wrong or expired. Run `claude setup-token` again, update `.env`, redeploy.
 - "raised permissions while running as root": your `PUID`/`PGID` are zero or the folder isn't owned by them. Re-run the `chown`.
 - "Exec format error": the image was built for the wrong CPU. Build it on the NAS itself (`uname -m` to see your arch) and rebuild with `--no-cache`.
-- Logs: `sudo docker logs claude-bridge`, `claude-webui`, or `claude-terminal`.
+- Logs: `sudo docker logs claude-bridge`, `claude-webui`, or `claude-terminal` (or whatever you set in the `*_CONTAINER_NAME` settings).
 
 ## What's in here
 

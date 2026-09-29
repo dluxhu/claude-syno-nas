@@ -11,11 +11,13 @@
 #   WEBUI_DATA_DIR              /volume1/docker/claude-nas/webui
 #   WEBUI_PORT                  3000
 #   CLAUDE_MODEL (optional)     sonnet | opus | haiku
+#   BRIDGE_CONTAINER_NAME (optional)  default claude-bridge
+#   WEBUI_CONTAINER_NAME (optional)   default claude-webui
 
 services:
   bridge:
     image: ghcr.io/dluxhu/claude-nas-bridge:latest
-    container_name: claude-bridge
+    container_name: ${BRIDGE_CONTAINER_NAME:-claude-bridge}
     restart: unless-stopped
     user: "${PUID}:${PGID}"
     environment:
@@ -41,7 +43,7 @@ services:
 
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
-    container_name: claude-webui
+    container_name: ${WEBUI_CONTAINER_NAME:-claude-webui}
     restart: unless-stopped
     depends_on: [bridge]
     ports:

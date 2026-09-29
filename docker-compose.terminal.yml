@@ -15,7 +15,7 @@ services:
       args:
         # Extra apt packages baked in at build time, e.g. EXTRA_PACKAGES="golang htop"
         EXTRA_PACKAGES: ${EXTRA_PACKAGES:-}
-    container_name: claude-terminal
+    container_name: ${TERMINAL_CONTAINER_NAME:-claude-terminal}
     restart: unless-stopped
     # Run as the NAS user that owns your shared folders (correct file ownership;
     # also keeps everything non-root — sshd included).
